@@ -61,7 +61,9 @@ enum Outcome {
 
   static void computeMetadata() {
     final combinations = combinationsWithReplacement(Luck.values, 3);
-    combinations.remove([Luck.wild, Luck.wild, Luck.wild]);
+
+    // Remove combinations with more than 1 wild, as they are considered bonus.
+    combinations.removeWhere((comb) => comb.where((l) => l == Luck.wild).length > 1);
 
     for (final combination in combinations) {
       final l1 = combination[0];
@@ -69,7 +71,7 @@ enum Outcome {
       final l3 = combination[2];
 
       final outcome = Outcome.fromLuck(l1, l2, l3);
-      _metadata[outcome]!.add((l1, l2, l3));
+      _metadata[outcome] = [ ...?_metadata[outcome], (l1, l2, l3)];
     }
   }
 }
@@ -97,13 +99,13 @@ List<List<T>> combinationsWithReplacement<T>(List<T> elements, int k) {
 class OutcomeDetail {
   final Outcome outcome;
   final double weight;
-  final (double, double) multiplier;
+  final double multiplier;
 
   OutcomeDetail({
     required this.outcome,
     required this.weight,
     required this.multiplier,
-  }): assert(multiplier.$2 - multiplier.$1 > 0.0);
+  });
 }
 
 
@@ -156,21 +158,23 @@ class SlotMachineController<T extends HasLuck> {
     double viewportFraction = 1/3,
   }) {
     assert(pageControllers == null || pageControllers.isEmpty);
-    pageControllers = pageControllers ?? List.generate(3, (_) => PageController(
-      initialPage: config.random.nextInt(config.reel.length),
-      viewportFraction: viewportFraction,
-    ), growable: false);
 
     if (Outcome._metadata.isEmpty) {
       Outcome.computeMetadata();
     }
+
+    final initialPages = _randomTarget();
+    assert(initialPages != null);
+
+    this.pageControllers = pageControllers ?? List.generate(3, (i) => PageController(
+      initialPage: config.reel.length + initialPages![i],
+      viewportFraction: viewportFraction,
+    ), growable: false);
+
   }
 
-  Future<OutcomeDetail?> spin({
-    void Function(int wheel)? onWheelStop,
-    Outcome? targetOutcome,
-  }) async {
-    final detail = config.nextOutcome(targetOutcome);
+  List<int>? _randomTarget([OutcomeDetail? detail]) {
+    detail ??= config.nextOutcome();
     final lucks = Outcome._metadata[detail.outcome];
     if (lucks == null) {
       return null;
@@ -191,46 +195,99 @@ class SlotMachineController<T extends HasLuck> {
       return items[index];
     }).toList(growable: false);
 
-    final times = 45 + config.random.nextInt(reelLength);
+    return target;
+  }
+
+  Future<OutcomeDetail?> spin({
+    void Function(int index)? onReelStop,
+    Outcome? targetOutcome,
+    List<int>? expectedTarget,
+  }) async {
+    assert(expectedTarget == null || expectedTarget.length == 3);
+
+    late List<int> target;
+    OutcomeDetail? detail;
+
+    if (expectedTarget == null) {
+      detail = config.nextOutcome(targetOutcome);
+      final randomTarget = _randomTarget(detail);
+      if (randomTarget == null) return null;
+      target = randomTarget;
+    } else {
+      target = expectedTarget;
+    }
+
+    final reelLength = config.reel.length;
+    final spins = 45 + config.random.nextInt(reelLength);
     final offset = 10 + config.random.nextInt(reelLength);
 
-    await Future.wait(List.generate(3, (index) async {
-      final controller = pageControllers[index];
-      final page = controller.page!.toInt();
-      final estimatedSpins = times + offset * index;
-      final destPage = page + estimatedSpins;
-      final spins = estimatedSpins + (target[index] + reelLength - destPage % reelLength);
-
-      for (int i=0; i<spins; i++) {
-        final currPgae = controller.page?.round();
-        if (currPgae == null) return Future.value(null);
-
-        await controller.animateToPage(
-          currPgae+1,
-          duration: Duration(milliseconds: 50),
-          curve: Curves.linear,
-        );
-      }
-
-      onWheelStop?.call(index);
-    }, growable: false));
+    await _spinReels(
+      spins: spins,
+      offset: offset,
+      target: target,
+      reelLength: reelLength,
+      onReelStop: onReelStop,
+    );
 
     return detail;
   }
+
+  Future<void> _spinReels({
+    required int spins,
+    required int offset,
+    required List<int> target,
+    required int reelLength,
+    void Function(int index)? onReelStop,
+  }) async {
+    await Future.wait(List.generate(3, (index) async {
+      await _spinReel(
+        controller: pageControllers[index],
+        spins: spins + offset * index,
+        target: target[index],
+        reelLength: reelLength,
+      );
+
+      onReelStop?.call(index);
+    }, growable: false));
+  }
+
+  Future<void> _spinReel({
+    required PageController controller,
+    required int spins,
+    required int target,
+    required int reelLength,
+    Duration duration = const Duration(milliseconds: 50),
+    Curve curve = Curves.linear,
+  }) async {
+    final page = controller.page!.toInt();
+    final destPage = page + spins;
+    final requiredSpins = spins + (target + reelLength - destPage % reelLength);
+
+    for (int i=0; i<requiredSpins; i++) {
+      final currPage = controller.page?.round();
+      if (currPage == null) return Future.value(null);
+
+      await controller.animateToPage(
+        currPage+1,
+        duration: duration,
+        curve: curve,
+      );
+    }
+  }
+
+  Future<void> shuffle({
+    List<int>? expectedTarget,
+  }) async {
+    final reelLength = config.reel.length;
+    final target = expectedTarget ?? List.generate(3, (_) {
+      return config.random.nextInt(reelLength*2);
+    });
+
+    await _spinReels(
+      spins: reelLength + config.random.nextInt(reelLength),
+      offset: 0,
+      target: target,
+      reelLength: reelLength,
+    );
+  }
 }
-
-
-/*
-
-0 - 🍒 🍒 🍒 (low)
-1 - 🍋 🍋 🍋 (low)
-2 - 💐 💐 💐 (low)
-3 - 🍑 🍑 🍑 (normal)
-4 - 🔔 🔔 🔔 (normal)
-5 - ⭐ ⭐ ⭐ (high)
-6 - 💎 💎 💎 (high)
-7 - 🍀 🍀 🍀 (jackpot)
-8 - 🎁 🎁 🎁 (bonus)
-9 - 🃏 🃏 🃏 (wild)
-
-*/
