@@ -1,153 +1,12 @@
-import 'dart:math' as math;
-
-import 'package:flutter/material.dart';
-
-
-/// Defines the luck of each item.
-enum Luck {
-  low,
-  normal,
-  high,
-  jackpot,
-  bonus,
-  wild,
-}
-
-/// Defines the outcome of the spin.
-enum Outcome {
-
-  /// All are different.
-  lose,
-
-  /// Atlest two matches.
-  mini,
-
-  /// 3 Matches of [Luck.low].
-  minor,
-
-  /// 3 Matches of [Luck.normal].
-  major,
-
-  /// 3 Matches of [Luck.high].
-  grand,
-
-  /// Bonus matched.
-  bonus,
-
-  /// Jackpot.
-  jackpot;
-
-  /// Evaluates [Outcome] basedon the [Luck]'s.
-  factory Outcome.fromLuck(Luck l1, Luck l2, Luck l3) {
-    if (l1 == l2 && l2 == l3) {
-      return (switch (l1) {
-        Luck.low => Outcome.minor,
-        Luck.normal => Outcome.major,
-        Luck.high => Outcome.grand,
-        Luck.bonus => Outcome.bonus,
-        Luck.jackpot => Outcome.jackpot,
-        Luck.wild => Outcome.bonus,
-      });
-    }
-
-    if (l1 != l2 && l2 != l3 && l3 != l1) {
-      return Outcome.lose;
-    }
-
-    return Outcome.mini;
-  }
-
-  static final Map<Outcome, List<(Luck, Luck, Luck)>> _metadata = {};
-
-  static void computeMetadata() {
-    final combinations = combinationsWithReplacement(Luck.values, 3);
-
-    // Remove combinations with more than 1 wild, as they are considered bonus.
-    combinations.removeWhere((comb) => comb.where((l) => l == Luck.wild).length > 1);
-
-    for (final combination in combinations) {
-      final l1 = combination[0];
-      final l2 = combination[1];
-      final l3 = combination[2];
-
-      final outcome = Outcome.fromLuck(l1, l2, l3);
-      _metadata[outcome] = [ ...?_metadata[outcome], (l1, l2, l3)];
-    }
-  }
-}
-
-List<List<T>> combinationsWithReplacement<T>(List<T> elements, int k) {
-  List<List<T>> result = [];
-
-  void generate(List<T> current, int start) {
-    if (current.length == k) {
-      result.add(List.from(current));
-      return;
-    }
-
-    for (int i = start; i < elements.length; i++) {
-      current.add(elements[i]);
-      generate(current, i);
-      current.removeLast();
-    }
-  }
-
-  generate([], 0);
-  return result;
-}
-
-class OutcomeDetail {
-  final Outcome outcome;
-  final double weight;
-  final double multiplier;
-
-  OutcomeDetail({
-    required this.outcome,
-    required this.weight,
-    required this.multiplier,
-  });
-}
+import 'package:flutter/material.dart' show PageController, Curves, Curve;
+import 'package:slot_machine/constants/luck.dart';
+import 'package:slot_machine/constants/outcome.dart';
+import 'package:slot_machine/models/slot_machine_config.dart';
+import 'package:slot_machine/models/outcome_detail.dart';
+import 'interface.dart';
 
 
-abstract interface class HasLuck<T> {
-  T get luck;
-}
-
-
-class SlotMachineConfig<T extends HasLuck> {
-  final List<OutcomeDetail> outcomes;
-  final math.Random random;
-  final List<T> reel;
-
-  SlotMachineConfig({
-    required this.reel,
-    required this.random,
-    required this.outcomes,
-  }): assert(outcomes.map((o) => o.weight).reduce((a, b) => a+b) == 100),
-      assert(reel.length > 3) {
-
-    outcomes.sort((a, b) => a.weight.compareTo(b.weight));
-  }
-
-  OutcomeDetail nextOutcome([Outcome? outcome]) {
-    if (outcome != null) {
-      return outcomes.firstWhere((o) => o.outcome == outcome);
-    }
-
-    final roll = random.nextDouble() * 100;
-    var cumulative = 0.0;
-
-    for (final outcome in outcomes) {
-      cumulative += outcome.weight;
-      if (roll < cumulative) {
-        return outcome;
-      }
-    }
-
-    return outcomes.last;
-  }
-}
-
+/// Controller for the slot machine, handling the spinning logic and outcome evaluation.
 class SlotMachineController<T extends HasLuck> {
   late final List<PageController> pageControllers;
   final SlotMachineConfig<T> config;
@@ -159,9 +18,7 @@ class SlotMachineController<T extends HasLuck> {
   }) {
     assert(pageControllers == null || pageControllers.isEmpty);
 
-    if (Outcome._metadata.isEmpty) {
-      Outcome.computeMetadata();
-    }
+    Outcome.computeMetadata();
 
     final initialPages = _randomTarget();
     assert(initialPages != null);
@@ -173,9 +30,10 @@ class SlotMachineController<T extends HasLuck> {
 
   }
 
+  /// Generates a random target combination of reel indices based on the desired [OutcomeDetail].
   List<int>? _randomTarget([OutcomeDetail? detail]) {
     detail ??= config.nextOutcome();
-    final lucks = Outcome._metadata[detail.outcome];
+    final lucks = Outcome.getMetadata(detail.outcome);
     if (lucks == null) {
       return null;
     }
@@ -198,6 +56,10 @@ class SlotMachineController<T extends HasLuck> {
     return target;
   }
 
+
+  /// Spins the reels and returns the resulting [OutcomeDetail]. Optionally, a
+  /// [targetOutcome] can be specified to force a specific outcome, and an [expectedTarget]
+  /// can be provided for testing purposes.
   Future<OutcomeDetail?> spin({
     void Function(int index)? onReelStop,
     Outcome? targetOutcome,
@@ -232,6 +94,7 @@ class SlotMachineController<T extends HasLuck> {
     return detail;
   }
 
+  /// Spins the reels with the specified parameters. Each reel will spin for a number of times.
   Future<void> _spinReels({
     required int spins,
     required int offset,
@@ -251,6 +114,8 @@ class SlotMachineController<T extends HasLuck> {
     }, growable: false));
   }
 
+
+  /// Spins a single reel to the target index with the specified number of spins and offset.
   Future<void> _spinReel({
     required PageController controller,
     required int spins,
@@ -275,6 +140,9 @@ class SlotMachineController<T extends HasLuck> {
     }
   }
 
+
+  /// Shuffles the reels to random positions. Optionally, an [expectedTarget] can be provided
+  /// for testing purposes.
   Future<void> shuffle({
     List<int>? expectedTarget,
   }) async {
