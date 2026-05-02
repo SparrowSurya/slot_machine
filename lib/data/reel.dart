@@ -4,11 +4,11 @@ import 'package:slot_machine/models/reel_item.dart';
 
 /// A list of reel items with their corresponding luck values.
 const reelList = [
-  ReelItem(emoji: '🍒', luck: Luck.low),
-  ReelItem(emoji: '🍋', luck: Luck.low),
-  ReelItem(emoji: '🌺', luck: Luck.low),
-  ReelItem(emoji: '🍑', luck: Luck.normal),
-  ReelItem(emoji: '🔔', luck: Luck.normal),
+  ReelItem(emoji: '🍒', luck: Luck.bad),
+  ReelItem(emoji: '🍋', luck: Luck.bad),
+  ReelItem(emoji: '🌺', luck: Luck.bad),
+  ReelItem(emoji: '🍑', luck: Luck.low),
+  ReelItem(emoji: '🔔', luck: Luck.low),
   ReelItem(emoji: '⭐', luck: Luck.high),
   ReelItem(emoji: '💎', luck: Luck.high),
   ReelItem(emoji: '🍀', luck: Luck.jackpot),

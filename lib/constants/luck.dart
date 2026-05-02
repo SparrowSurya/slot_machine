@@ -1,8 +1,8 @@
 
 /// Defines the luck of each item.
 enum Luck {
+  bad,
   low,
-  normal,
   high,
   jackpot,
   bonus,

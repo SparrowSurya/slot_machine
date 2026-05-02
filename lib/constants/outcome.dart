@@ -10,10 +10,10 @@ enum Outcome {
   /// Atlest two matches.
   mini,
 
-  /// 3 Matches of [Luck.low].
+  /// 3 Matches of [Luck.bad].
   minor,
 
-  /// 3 Matches of [Luck.normal].
+  /// 3 Matches of [Luck.low].
   major,
 
   /// 3 Matches of [Luck.high].

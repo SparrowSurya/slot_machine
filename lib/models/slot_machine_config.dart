@@ -77,8 +77,8 @@ class SlotMachineConfig<T extends HasLuck> {
     if (ids.length == 1 || (ids.length == 2 && lucks.contains(Luck.wild))) {
       final item = [i1, i2, i3].firstWhere((i) => i.luck != Luck.wild);
       return (switch (item.luck) {
-        Luck.low => Outcome.minor,
-        Luck.normal => Outcome.major,
+        Luck.bad => Outcome.minor,
+        Luck.low => Outcome.major,
         Luck.high => Outcome.grand,
         Luck.bonus => Outcome.bonus,
         Luck.jackpot => Outcome.jackpot,
