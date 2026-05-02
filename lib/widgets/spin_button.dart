@@ -4,8 +4,13 @@ import 'package:flutter/material.dart';
 /// Custom spin button widget with raised effect and disabled state handling.
 class SpinButton extends StatefulWidget {
   final VoidCallback? onTap;
+  final String? text;
 
-  const SpinButton({super.key, required this.onTap});
+  const SpinButton({
+    super.key,
+    this.text,
+    required this.onTap,
+  });
 
   @override
   State<SpinButton> createState() => _SpinButtonState();
@@ -122,7 +127,7 @@ class _SpinButtonState extends State<SpinButton> {
                 ),
               ],
               Text(
-                'SPIN',
+                widget.text ?? 'SPIN',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: textColor,
                   fontWeight: FontWeight.bold,

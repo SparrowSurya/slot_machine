@@ -1,15 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:slot_machine/assets.dart';
 import 'package:slot_machine/constants/outcome.dart';
 import 'package:slot_machine/constants/values.dart';
 import 'package:slot_machine/controllers/slot_machine/slot_machine_controller.dart';
 import 'package:slot_machine/data/outcomes.dart';
 import 'package:slot_machine/data/reel.dart';
-import 'package:slot_machine/models/reel_item.dart';
 import 'package:slot_machine/models/slot_machine_config.dart';
+import 'package:slot_machine/widgets/bet_display_widget.dart';
+import 'package:slot_machine/widgets/bet_selection_widget.dart';
+import 'package:slot_machine/widgets/out_of_coins_widget.dart';
+import 'package:slot_machine/widgets/slot_machine_widget.dart';
 import 'package:slot_machine/widgets/spin_button.dart';
 
 
@@ -29,8 +31,9 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
   late final List<AnimationController> _bounceControllers;
   late final List<Animation<double>> _bounceAnimations;
 
-  late final ValueNotifier<double> coins;
-  late final ValueNotifier<double> bet;
+  late final ValueNotifier<double> _coinsNotifier;
+  late final ValueNotifier<double> _betNotifier;
+  late final ValueNotifier<bool> _isFreeSpinNotifier;
   final spinning = ValueNotifier(false);
 
   int bettingValue = 0;
@@ -77,18 +80,18 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
 
     _controller = SlotMachineController(config: _config);
 
-    coins = ValueNotifier(100);
-    bet = ValueNotifier(10);
-
-    coins.addListener(() {
-      var betValue = bet.value;
-      if (betValue > coins.value) {
-         betValue = coins.value;
+    _coinsNotifier = ValueNotifier(100);
+    _betNotifier = ValueNotifier(10);
+    _isFreeSpinNotifier = ValueNotifier(false);
+    _coinsNotifier.addListener(() {
+      var betValue = _betNotifier.value;
+      if (betValue > _coinsNotifier.value) {
+         betValue = _coinsNotifier.value;
       }
       if (betValue <= 0) {
-        betValue = math.min(coins.value, 10);
+        betValue = math.min(_coinsNotifier.value, 10);
       }
-      bet.value = betValue;
+      _betNotifier.value = betValue;
     });
   }
 
@@ -101,16 +104,26 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
 
   Future<void> _spin() async {
     spinning.value = true;
-    bettingValue = bet.value.toInt();
-    coins.value -= bet.value;
+    bettingValue = _betNotifier.value.toInt();
+
+    final isFreeSpin = _isFreeSpinNotifier.value;
+    if (!isFreeSpin) _coinsNotifier.value -= bettingValue;
+
     final result = await _controller.spin(
       onReelStop: (index) => _bounceControllers[index].forward(from: 0),
       targetOutcome: null,
     );
+    if (!mounted) return;
+
     if (result != null) {
-      coins.value += (bet.value * result.multiplier).toInt();
+      final earning = (bettingValue * result.multiplier).toInt();
+      _coinsNotifier.value += earning;
+      if (result.outcome == Outcome.bonus) {
+        _isFreeSpinNotifier.value = true;
+      }
     }
     spinning.value = false;
+    if (isFreeSpin) _isFreeSpinNotifier.value = false;
   }
 
   @override
@@ -181,15 +194,21 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: ValueListenableBuilder(
-                        valueListenable: coins,
-                        builder: (ctx, value, child) {
-                          return Text(
-                            '${value.floorToDouble()}  ${AppConstants.coinEmoji}',
-                            style: TextStyle(
-                              color: colors.secondary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                        valueListenable: _coinsNotifier,
+                        builder: (ctx, coinsValue, child) {
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: coinsValue),
+                            duration: const Duration(milliseconds: 500),
+                            builder: (ctx, value, child) {
+                              return Text(
+                                '${value.floorToDouble()}  ${AppConstants.coinEmoji}',
+                                style: TextStyle(
+                                  color: colors.secondary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              );
+                            }
                           );
                         }
                       ),
@@ -199,359 +218,80 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
                 const SizedBox(height: 20),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      border: Border.all(
-                        color: colors.primary.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                        BoxShadow(
-                          color: Colors.white.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, -4),
-                        ),
-                      ],
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                      decoration: BoxDecoration(
-                        color: theme.scaffoldBackgroundColor,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: List.generate(3, (index) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: _rollerWidget(
-                              context: context,
-                              controller: _controller.pageControllers[index],
-                              bounceAnimation: _bounceAnimations[index],
-                              slots: reelList,
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
+                  child: SlotMachineWidget(
+                    controllers: _controller.pageControllers,
+                    animations: _bounceAnimations,
+                    items: reelList,
                   ),
                 ),
                 const SizedBox(height: 24),
-                ValueListenableBuilder(
-                  valueListenable: spinning,
-                  builder: (context, isSpinning, child) {
+                const Spacer(),
+                ListenableBuilder(
+                  listenable: Listenable.merge([
+                    spinning,
+                    _coinsNotifier,
+                    _betNotifier,
+                    _isFreeSpinNotifier,
+                  ]),
+                  builder: (ctx, child) {
+                    final isSpinning = spinning.value;
+                    final coinValue = _coinsNotifier.value;
+                    final betValue = _betNotifier.value;
+                    final isFree = _isFreeSpinNotifier.value;
+
+                    Widget? child;
+
                     if (isSpinning) {
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: colors.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          spacing: 12,
-                          children: [
-                            Text(
-                              'Bet',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: colors.primary,
-                              ),
-                            ),
-                            Text(
-                              '${AppConstants.coinEmoji} $bettingValue',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: colors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
+                      child = BetDisplayWidget(
+                        currentBet: isFree ? 0 : betValue,
                       );
                     }
 
-                    return ValueListenableBuilder(
-                      valueListenable: coins,
-                      builder: (ctx, coinValue, child) {
-                        if (coinValue <= 0) {
-                          return SizedBox.shrink();
-                        }
-
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: colors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ValueListenableBuilder(
-                                valueListenable: bet,
-                                builder: (ctx, betValue, child) {
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    spacing: 16,
-                                    children: [
-                                      Text(
-                                        'Bet:',
-                                        style: theme.textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            '${betValue.floor()}',
-                                            style: theme.textTheme.titleMedium?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: colors.secondary,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          const Text(AppConstants.coinEmoji),
-                                        ],
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              ValueListenableBuilder(
-                                valueListenable: bet,
-                                builder: (ctx, betValue, child) {
-                                  return Slider(
-                                    min: 1,
-                                    max: coinValue.floorToDouble(),
-                                    value: betValue.floorToDouble(),
-                                    onChanged: (v) => bet.value = v.floorToDouble(),
-                                  );
-                                },
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () {
-                                      HapticFeedback.selectionClick();
-                                      bet.value = 1;
-                                    },
-                                    child: Text(
-                                      '1',
-                                      style: TextStyle(
-                                        color: colors.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  ValueListenableBuilder(
-                                    valueListenable: coins,
-                                    builder: (ctx, coinValue, child) {
-                                      return GestureDetector(
-                                        onTap: () => bet.value = coinValue,
-                                        child: AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 200),
-                                          child: Text(
-                                            '${coinValue.floor()}',
-                                            style: TextStyle(
-                                              color: colors.primary,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    );
-                  }
-                ),
-                ValueListenableBuilder(
-                  valueListenable: spinning,
-                  builder: (context, isSpinning, child) {
-                    if (isSpinning) {
-                      return SizedBox.shrink();
+                    if (coinValue <= 0 && !isSpinning) {
+                      return OutOfCoinsWidget(
+                        gotoShop: () => _showShopDialog(context),
+                      );
                     }
 
-                    return ValueListenableBuilder(
-                      valueListenable: coins,
-                      builder: (context, coinValue, _) {
-                        if (coinValue > 0) {
-                          return SizedBox.shrink();
-                        }
+                    if (coinValue > 0 && !isSpinning) {
+                      child = BetSelectionWidget(
+                        minBet: 1.0,
+                        maxBet: coinValue,
+                        currentBet: betValue,
+                        onBetChanged: isSpinning ? null : (v) => _betNotifier.value = v,
+                      );
+                    }
 
-                        return Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                AppConstants.coinEmoji,
-                                style: const TextStyle(fontSize: 40),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Out of Coins',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Get more coins to continue spinning',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.7),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: () => _showShopDialog(context),
-                                  child: const Text('GET COINS'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                    return AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      child: child ?? SizedBox.shrink(),
                     );
-                  }
+                  },
                 ),
+                const Spacer(),
                 const SizedBox(height: 24),
                 Center(
-                  child: ValueListenableBuilder(
-                    valueListenable: coins,
-                    builder: (ctx, coins, child) {
-                      return ValueListenableBuilder(
-                        valueListenable: spinning,
-                        builder: (ctx, spinning, child) {
-                          return SpinButton(
-                            onTap: spinning || coins <= 0 ? null : _spin,
-                          );
-                        }
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([
+                      spinning,
+                      _coinsNotifier,
+                      _isFreeSpinNotifier,
+                    ]),
+                    builder: (ctx, child) {
+                      final isFree = _isFreeSpinNotifier.value;
+                      final isSpinning = spinning.value;
+                      final coinValue = _coinsNotifier.value;
+                      final isEnabled = !isSpinning && coinValue > 0;
+
+                      return SpinButton(
+                        text: isFree ? 'FREE' : null,
+                        onTap: isEnabled ? _spin : null,
                       );
-                    }
+                    },
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _rollerWidget({
-    required BuildContext context,
-    required PageController controller,
-    required Animation<double> bounceAnimation,
-    required List<ReelItem> slots,
-  }) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Container(
-      height: 284,
-      width: 104,
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: colors.primary.withValues(alpha: 0.2),
-          width: 1,
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          color: theme.scaffoldBackgroundColor,
-          child: IgnorePointer(
-            ignoring: true,
-            child: PageView.builder(
-              controller: controller,
-              scrollDirection: Axis.vertical,
-              itemBuilder: (context, index) {
-                final item = slots[index % slots.length];
-
-                return AnimatedBuilder(
-                  animation: bounceAnimation,
-                  builder: (context, child) {
-                    return Transform.translate(
-                      offset: Offset(0, bounceAnimation.value),
-                      child: child,
-                    );
-                  },
-                  child: Center(
-                    child: Text(
-                      item.emoji,
-                      style: const TextStyle(fontSize: 48),
-                    ),
-                  ),
-                );
-              },
             ),
           ),
         ),
@@ -622,7 +362,7 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
 
   Widget _buildOutcomeRow(
     BuildContext context,
-    Outcome outcomeEnum,
+    Outcome outcome,
     double multiplier,
   ) {
     final theme = Theme.of(context);
@@ -634,14 +374,14 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            outcomeEnum.name[0].toUpperCase() + outcomeEnum.name.substring(1),
+            outcome.name[0].toUpperCase() + outcome.name.substring(1),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
-              color: getOutcomeColor(outcomeEnum, colors),
+              color: getOutcomeColor(outcome, colors),
             ),
           ),
           Text(
-            multiplier == 1 ? '×${multiplier.toInt()}' : '×$multiplier',
+            formatMultiplier(multiplier),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: colors.secondary,
               fontWeight: FontWeight.bold,
@@ -707,7 +447,7 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                            coins.value += freeCoins;
+                            _coinsNotifier.value += freeCoins;
                             Navigator.pop(context);
                           },
                           child: const Text('CLAIM'),
@@ -778,6 +518,14 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
         ),
       ),
     );
+  }
+
+  String formatMultiplier(double value) {
+    final multiplier = value
+      .toStringAsFixed(2)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+    return "×$multiplier";
   }
 
   Color getOutcomeColor(Outcome outcomeEnum, ColorScheme colors) {

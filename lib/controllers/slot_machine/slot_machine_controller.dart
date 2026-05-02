@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart' show PageController, Curves, Curve;
-import 'package:slot_machine/constants/luck.dart';
 import 'package:slot_machine/constants/outcome.dart';
 import 'package:slot_machine/models/slot_machine_config.dart';
 import 'package:slot_machine/models/outcome_detail.dart';
@@ -18,8 +17,6 @@ class SlotMachineController<T extends HasLuck> {
   }) {
     assert(pageControllers == null || pageControllers.isEmpty);
 
-    Outcome.computeMetadata();
-
     final initialPages = _randomTarget();
     assert(initialPages != null);
 
@@ -33,7 +30,7 @@ class SlotMachineController<T extends HasLuck> {
   /// Generates a random target combination of reel indices based on the desired [OutcomeDetail].
   List<int>? _randomTarget([OutcomeDetail? detail]) {
     detail ??= config.nextOutcome();
-    final lucks = Outcome.getMetadata(detail.outcome);
+    final lucks = config.metadata[detail.outcome];
     if (lucks == null) {
       return null;
     }
@@ -42,10 +39,10 @@ class SlotMachineController<T extends HasLuck> {
     final (l1, l2, l3) = lucks[chosen];
     final reelLength = config.reel.length;
 
-    final target = [l1, l2, l3].map((Luck luck) {
+    final target = [l1, l2, l3].map((item) {
       final items = List
         .generate(reelLength, (i) => (i, config.reel[i]))
-        .where((item) => item.$2.luck == luck)
+        .where((i) => i.$2 == item)
         .map((item) => item.$1)
         .toList(growable: false);
 
@@ -67,7 +64,7 @@ class SlotMachineController<T extends HasLuck> {
   }) async {
     assert(expectedTarget == null || expectedTarget.length == 3);
 
-    late List<int> target;
+    late final List<int> target;
     OutcomeDetail? detail;
 
     if (expectedTarget == null) {

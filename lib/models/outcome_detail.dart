@@ -7,7 +7,7 @@ class OutcomeDetail {
   /// [Outcome] value.
   final Outcome outcome;
 
-  /// Probability weight of the outcome, out of 100.
+  /// Probability weight of the outcome.
   final double weight;
 
   /// Multiplier for the payout.
