@@ -3,6 +3,7 @@ import 'package:slot_machine/constants/luck.dart';
 import 'package:slot_machine/constants/outcome.dart';
 import 'package:slot_machine/controllers/slot_machine/interface.dart';
 import 'package:slot_machine/models/outcome_detail.dart';
+import 'package:slot_machine/models/triplet.dart';
 import 'package:slot_machine/utils/combinatorics.dart';
 
 
@@ -18,7 +19,7 @@ class SlotMachineConfig<T extends HasLuck> {
   final List<T> reel;
 
   /// Metadata mapping each [Outcome] to the corresponding combinations of reel items.
-  final Map<Outcome, List<(T, T, T)>> metadata = {};
+  final Map<Outcome, List<Triplet<T>>> metadata = {};
 
   SlotMachineConfig({
     required this.reel,
@@ -59,12 +60,10 @@ class SlotMachineConfig<T extends HasLuck> {
     combinations.removeWhere((comb) => comb.where((l) => l.luck == Luck.wild).length > 1);
 
     for (final combination in combinations) {
-      final l1 = combination[0];
-      final l2 = combination[1];
-      final l3 = combination[2];
+      final triplet = Triplet.fromIterable(combination);
+      final outcome = evaluateOutcome(triplet.m1, triplet.m2, triplet.m3);
 
-      final outcome = evaluateOutcome(l1, l2, l3);
-      metadata[outcome] = [ ...?metadata[outcome], (l1, l2, l3)];
+      metadata[outcome] = [ ...?metadata[outcome], triplet];
     }
   }
 

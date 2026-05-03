@@ -4,50 +4,53 @@ import 'package:slot_machine/constants/values.dart';
 
 class BetDisplayWidget extends StatelessWidget {
   final double currentBet;
+  final bool freeSpin;
 
   const BetDisplayWidget({
     super.key,
     required this.currentBet,
+    this.freeSpin = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final bettingValue = currentBet.floor().toString();
+    final colors = Theme.of(context).colorScheme;
+    final bettingValue = currentBet.floor();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: freeSpin
+              ? colors.primary.withValues(alpha: 0.6) // 👈 highlight in free spin
+              : colors.outline,
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        spacing: 12,
         children: [
           Text(
-            'Bet${currentBet.floor() == 0 ? '(FREE)' : ''}:',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: colors.primary,
+            freeSpin ? "FREE SPIN" : "BET",
+            style: TextStyle(
+              fontSize: 12,
+              letterSpacing: 1.2,
+              color: freeSpin
+                  ? colors.primary
+                  : colors.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 6),
           Text(
-            '${AppConstants.coinEmoji} $bettingValue',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: colors.primary,
+            "${AppConstants.coinEmoji} $bettingValue",
+            style: TextStyle(
+              fontSize: freeSpin ? 18 : 20,
+              fontWeight: FontWeight.w600,
+              color: freeSpin
+                  ? colors.primary
+                  : colors.secondary,
             ),
           ),
         ],

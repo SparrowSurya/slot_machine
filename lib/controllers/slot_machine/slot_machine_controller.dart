@@ -35,11 +35,11 @@ class SlotMachineController<T extends HasLuck> {
       return null;
     }
 
-    final chosen = config.random.nextInt(lucks.length);
-    final (l1, l2, l3) = lucks[chosen];
+    final chosenIndex = config.random.nextInt(lucks.length);
+    final chosenLuck = lucks[chosenIndex];
     final reelLength = config.reel.length;
 
-    final target = [l1, l2, l3].map((item) {
+    final target = chosenLuck.toList().map((item) {
       final items = List
         .generate(reelLength, (i) => (i, config.reel[i]))
         .where((i) => i.$2 == item)

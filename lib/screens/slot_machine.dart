@@ -8,6 +8,8 @@ import 'package:slot_machine/controllers/slot_machine/slot_machine_controller.da
 import 'package:slot_machine/data/outcomes.dart';
 import 'package:slot_machine/data/reel.dart';
 import 'package:slot_machine/models/slot_machine_config.dart';
+import 'package:slot_machine/models/spin_result.dart';
+import 'package:slot_machine/models/triplet.dart';
 import 'package:slot_machine/widgets/bet_display_widget.dart';
 import 'package:slot_machine/widgets/bet_selection_widget.dart';
 import 'package:slot_machine/widgets/out_of_coins_widget.dart';
@@ -34,6 +36,7 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
   late final ValueNotifier<double> _coinsNotifier;
   late final ValueNotifier<double> _betNotifier;
   late final ValueNotifier<bool> _isFreeSpinNotifier;
+  late final ValueNotifier<SpinResult> spinResult;
   final spinning = ValueNotifier(false);
 
   int bettingValue = 0;
@@ -93,6 +96,21 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
       }
       _betNotifier.value = betValue;
     });
+
+    final indicies = Triplet.fromIterable(
+      _controller.pageControllers.map((c) => c.initialPage),
+    );
+    final reelItems = indicies
+      .toList()
+      .map((i) => _config.reel[(i % _config.reel.length).toInt()])
+      .toList();
+    final initialOutcome = _config.evaluateOutcome(reelItems[0], reelItems[1], reelItems[2]);
+    spinResult = ValueNotifier(SpinResult(
+      result: Triplet.fromIterable(
+        _controller.pageControllers.map((c) => c.initialPage),
+      ),
+      detail: _config.outcomes.firstWhere((d) => d.outcome == initialOutcome),
+    ));
   }
 
   @override
@@ -109,18 +127,27 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
     final isFreeSpin = _isFreeSpinNotifier.value;
     if (!isFreeSpin) _coinsNotifier.value -= bettingValue;
 
-    final result = await _controller.spin(
+    final detail = await _controller.spin(
       onReelStop: (index) => _bounceControllers[index].forward(from: 0),
       targetOutcome: null,
     );
     if (!mounted) return;
 
-    if (result != null) {
-      final earning = (bettingValue * result.multiplier).toInt();
+    if (detail != null) {
+      final earning = (bettingValue * detail.multiplier).toInt();
       _coinsNotifier.value += earning;
-      if (result.outcome == Outcome.bonus) {
+      if (detail.outcome == Outcome.bonus) {
         _isFreeSpinNotifier.value = true;
       }
+      await Future.delayed(Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      spinResult.value = SpinResult(
+        result: Triplet.fromIterable(
+          _controller.pageControllers.map((c) => c.page!.toInt() % _config.reel.length),
+        ),
+        detail: detail,
+      );
     }
     spinning.value = false;
     if (isFreeSpin) _isFreeSpinNotifier.value = false;
@@ -218,10 +245,17 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
                 const SizedBox(height: 20),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: SlotMachineWidget(
-                    controllers: _controller.pageControllers,
-                    animations: _bounceAnimations,
-                    items: reelList,
+                  child: ValueListenableBuilder(
+                    valueListenable: spinning,
+                    builder: (context, isSpinning, child) {
+                      return SlotMachineWidget(
+                        controllers: _controller.pageControllers,
+                        animations: _bounceAnimations,
+                        items: reelList,
+                        spinResult: spinResult,
+                        spinning: isSpinning,
+                      );
+                    }
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -243,7 +277,8 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
 
                     if (isSpinning) {
                       child = BetDisplayWidget(
-                        currentBet: isFree ? 0 : betValue,
+                        currentBet: betValue,
+                        freeSpin: isFree,
                       );
                     }
 
