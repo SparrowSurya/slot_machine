@@ -297,8 +297,15 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
                       );
                     }
 
-                    return AnimatedSize(
+                    return AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) {
+                        return SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1,
+                          child: child,
+                        );
+                      },
                       child: child ?? SizedBox.shrink(),
                     );
                   },
