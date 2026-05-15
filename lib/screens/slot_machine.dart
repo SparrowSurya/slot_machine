@@ -134,11 +134,6 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
     if (!mounted) return;
 
     if (detail != null) {
-      final earning = (bettingValue * detail.multiplier).toInt();
-      _coinsNotifier.value += earning;
-      if (detail.outcome == Outcome.bonus) {
-        _isFreeSpinNotifier.value = true;
-      }
       await Future.delayed(Duration(milliseconds: 500));
       if (!mounted) return;
 
@@ -148,6 +143,12 @@ class _MySlotMachineState extends State<MySlotMachine> with TickerProviderStateM
         ),
         detail: detail,
       );
+
+      final earning = (bettingValue * detail.multiplier).toInt();
+      _coinsNotifier.value += earning;
+      if (detail.outcome == Outcome.bonus) {
+        _isFreeSpinNotifier.value = true;
+      }
     }
     spinning.value = false;
     if (isFreeSpin) _isFreeSpinNotifier.value = false;
